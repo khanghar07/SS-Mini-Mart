@@ -30,9 +30,9 @@ const Footer = () => {
         <div>
           <h4 className="font-heading font-semibold text-ink-900 mb-3">Contact Us</h4>
           <div className="flex flex-col gap-2 text-sm text-ink-700">
-            <div className="flex items-center gap-2"><Phone className="h-4 w-4" /> (555) 123-4567</div>
-            <div className="flex items-center gap-2"><Mail className="h-4 w-4" /> hello@freshmart.com</div>
-            <div className="flex items-center gap-2"><MapPin className="h-4 w-4" /> 123 Market Street, Springfield</div>
+            <div className="flex items-center gap-2"><Phone className="h-4 w-4" /> 03353531424</div>
+            <div className="flex items-center gap-2"><Mail className="h-4 w-4" /> khanghar07@gmail.com</div>
+            <div className="flex items-center gap-2"><MapPin className="h-4 w-4" /> Dileep Nagar Mithi</div>
           </div>
         </div>
       </div>
