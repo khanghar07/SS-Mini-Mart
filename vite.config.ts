@@ -6,6 +6,9 @@ export default defineConfig({
   server: {
     port: 5173,
   },
+  preview: {
+    allowedHosts: ["ss-mini-mart.onrender.com"],
+  },
   plugins: [react()],
   resolve: {
     alias: {
