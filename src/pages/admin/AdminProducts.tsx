@@ -4,13 +4,13 @@ import { useProducts } from "@/context/ProductContext";
 import { useCategories } from "@/context/CategoryContext";
 import { useMemo, useState } from "react";
 import type { Product } from "@/types";
-import { fileToDataUrl } from "@/lib/file";
+import { uploadToCloudinary } from "@/lib/cloudinary";
 
 const emptyForm = {
   id: "",
   name: "",
   price: "",
-  category: "",
+  categoryId: "",
   stock: "",
   imageUrl: "",
   discount: "",
@@ -23,13 +23,15 @@ const MAX_PRODUCT_IMAGE_BYTES = 2_000_000;
 const AdminProducts = () => {
   const { products, addProduct, updateProduct, deleteProduct } = useProducts();
   const { categories } = useCategories();
-  const [form, setForm] = useState<FormState>({ ...emptyForm, category: categories[0]?.id || "beverages" });
+  const [form, setForm] = useState<FormState>({ ...emptyForm, categoryId: categories[0]?.id || "" });
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const filtered = useMemo(() => {
     let list = products;
-    if (categoryFilter !== "all") list = list.filter((p) => p.category === categoryFilter);
+    if (categoryFilter !== "all") list = list.filter((p) => p.categoryId === categoryFilter);
     if (search.trim()) list = list.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
     return list;
   }, [products, search, categoryFilter]);
@@ -37,7 +39,7 @@ const AdminProducts = () => {
   const isEditing = Boolean(form.id);
 
   const handleAddOrUpdate = () => {
-    if (!form.name.trim() || !form.price.trim() || !form.stock.trim()) return;
+    if (!form.name.trim() || !form.price.trim() || !form.stock.trim() || !form.imageUrl.trim()) return;
 
     const price = Number(form.price);
     const stock = Number(form.stock);
@@ -50,10 +52,8 @@ const AdminProducts = () => {
       description: form.description.trim() || "Fresh product added by admin.",
       price,
       discount,
-      category: form.category.trim() || categories[0]?.id || "beverages",
-      imageUrl:
-        form.imageUrl.trim() ||
-        "https://images.unsplash.com/photo-1542838132-92c53300491e?w=800&h=800&fit=crop",
+      categoryId: form.categoryId.trim() || categories[0]?.id || "uncategorized",
+      imageUrl: form.imageUrl.trim(),
       stock,
       isActive: true,
     };
@@ -61,7 +61,7 @@ const AdminProducts = () => {
     if (isEditing) updateProduct(payload);
     else addProduct(payload);
 
-    setForm({ ...emptyForm, category: categories[0]?.id || "beverages" });
+    setForm({ ...emptyForm, categoryId: categories[0]?.id || "" });
   };
 
   const handleEdit = (product: Product) => {
@@ -69,7 +69,7 @@ const AdminProducts = () => {
       id: product.id,
       name: product.name,
       price: String(product.price),
-      category: product.category,
+      categoryId: product.categoryId,
       stock: String(product.stock),
       imageUrl: product.imageUrl,
       discount: String(product.discount ?? 0),
@@ -84,11 +84,20 @@ const AdminProducts = () => {
   const handleFile = async (file?: File | null) => {
     if (!file) return;
     if (file.size > MAX_PRODUCT_IMAGE_BYTES) {
-      alert("Image is too large for local storage. Please use a smaller image or paste an image URL instead.");
+      alert("Image is too large. Please use a smaller image.");
       return;
     }
-    const dataUrl = await fileToDataUrl(file);
-    setForm((prev) => ({ ...prev, imageUrl: dataUrl }));
+    setUploading(true);
+    setUploadProgress(0);
+    try {
+      const url = await uploadToCloudinary(file);
+      setUploadProgress(100);
+      setForm((prev) => ({ ...prev, imageUrl: url }));
+    } catch (error) {
+      console.error("Failed to upload product image.", error);
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -127,7 +136,7 @@ const AdminProducts = () => {
                 {filtered.map((p) => (
                   <tr key={p.id} className="border-t border-emerald-100">
                     <td className="py-3">{p.name}</td>
-                    <td>{p.category}</td>
+                    <td>{categories.find((c) => c.id === p.categoryId)?.name || p.categoryId}</td>
                     <td>{formatCurrency(p.price)}</td>
                     <td>{p.stock}</td>
                     <td className="space-x-2">
@@ -147,18 +156,20 @@ const AdminProducts = () => {
 
         <div id="add-product" className="card p-6">
           <h2 className="text-lg font-semibold text-ink-900">{isEditing ? "Edit Product" : "Add New Product"}</h2>
-          <p className="text-sm text-ink-700 mt-1">Updates are saved to localStorage.</p>
+          <p className="text-sm text-ink-700 mt-1">Updates are synced across devices.</p>
           <form className="mt-4 space-y-3" onSubmit={(e) => e.preventDefault()}>
             <input className="input" placeholder="Product name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <input className="input" placeholder="Price (PKR)" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
-            <select className="input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+            <select className="input" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
             <input className="input" placeholder="Stock quantity" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
-            <input className="input" placeholder="Image URL (optional)" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} />
             <input type="file" accept="image/*" onChange={(e) => handleFile(e.target.files?.[0])} />
+            {uploading && (
+              <div className="text-xs text-ink-700">Uploading image... {uploadProgress}%</div>
+            )}
             <input className="input" placeholder="Discount % (optional)" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} />
             <textarea className="input" placeholder="Description (optional)" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             <div className="flex gap-2">
@@ -166,7 +177,7 @@ const AdminProducts = () => {
                 {isEditing ? "Update Product" : "Save Product"}
               </button>
               {isEditing && (
-                <button type="button" className="btn-outline w-full" onClick={() => setForm({ ...emptyForm, category: categories[0]?.id || "beverages" })}>
+                <button type="button" className="btn-outline w-full" onClick={() => setForm({ ...emptyForm, categoryId: categories[0]?.id || "" })}>
                   Cancel
                 </button>
               )}

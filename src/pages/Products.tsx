@@ -18,7 +18,7 @@ const Products = () => {
     let result = products.filter((p) => p.isActive);
 
     if (activeCategory !== "all") {
-      result = result.filter((p) => p.category === activeCategory);
+      result = result.filter((p) => p.categoryId === activeCategory);
     }
 
     if (search.trim()) {

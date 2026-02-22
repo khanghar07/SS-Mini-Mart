@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useHero } from "@/context/HeroContext";
 
 const HeroSection = () => {
+  const { heroImage, loading } = useHero();
   return (
     <section className="relative overflow-hidden rounded-2xl mt-6 bg-hero">
       <div className="grid gap-6 md:grid-cols-[1.1fr,0.9fr] items-center p-6 md:p-10">
@@ -32,12 +34,18 @@ const HeroSection = () => {
         </div>
         <div className="relative">
           <div className="absolute -right-6 -top-6 h-40 w-40 rounded-full bg-brand-400/20 blur-2xl" />
-          <img
-            src="https://images.unsplash.com/photo-1580915411954-282cb1ceefc3?w=1200&h=900&fit=crop"
-            alt="Mini mart essentials"
-            className="relative rounded-2xl shadow-soft object-cover w-full h-64 md:h-80"
-            loading="lazy"
-          />
+          {heroImage ? (
+            <img
+              src={heroImage}
+              alt="Hero"
+              className="relative rounded-2xl shadow-soft object-cover w-full h-64 md:h-80"
+              loading="lazy"
+            />
+          ) : (
+            <div className="relative rounded-2xl shadow-soft w-full h-64 md:h-80 bg-emerald-50 border border-emerald-100 flex items-center justify-center text-ink-600 text-sm">
+              {loading ? "Loading hero..." : "Hero image not set"}
+            </div>
+          )}
         </div>
       </div>
     </section>

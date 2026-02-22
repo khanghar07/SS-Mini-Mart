@@ -1,73 +1,96 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { CartItem, Product } from "@/types";
 
 interface CartContextType {
   items: CartItem[];
-  addToCart: (product: Product, quantity?: number) => void;
-  removeFromCart: (productId: string) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
-  clearCart: () => void;
+  addToCart: (product: Product, quantity?: number) => Promise<void>;
+  removeFromCart: (productId: string) => Promise<void>;
+  updateQuantity: (productId: string, quantity: number) => Promise<void>;
+  clearCart: () => Promise<void>;
   totalItems: number;
   subtotal: number;
   deliveryFee: number;
   total: number;
+  notification: string | null;
+  clearNotification: () => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
-const STORAGE_KEY = "freshmart-cart";
-const DELIVERY_FEE = 2.5;
+const DELIVERY_FEE = 100;
 
 export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [notification, setNotification] = useState<string | null>(null);
+  const notificationTimeout = useRef<number | null>(null);
 
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) return;
-    try {
-      const parsed = JSON.parse(saved);
-      setItems(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      setItems([]);
+  const clearNotification = () => {
+    if (notificationTimeout.current) {
+      window.clearTimeout(notificationTimeout.current);
+      notificationTimeout.current = null;
     }
-  }, []);
+    setNotification(null);
+  };
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    } catch (error) {
-      // Avoid crashing the app if storage is full or unavailable.
-      console.warn("Failed to save cart to localStorage.", error);
+  const showNotification = (message: string) => {
+    setNotification(message);
+    if (notificationTimeout.current) {
+      window.clearTimeout(notificationTimeout.current);
     }
-  }, [items]);
+    notificationTimeout.current = window.setTimeout(() => {
+      setNotification(null);
+      notificationTimeout.current = null;
+    }, 2000);
+  };
 
-  const addToCart = (product: Product, quantity = 1) => {
+  useEffect(() => () => clearNotification(), []);
+
+  const addToCart = async (product: Product, quantity = 1) => {
     if (product.stock === 0) return;
-    setItems((prev) => {
-      const existing = prev.find((i) => i.product.id === product.id);
-      if (existing) {
-        const nextQty = Math.min(existing.quantity + quantity, product.stock);
-        return prev.map((i) => (i.product.id === product.id ? { ...i, quantity: nextQty } : i));
-      }
-      return [...prev, { product, quantity: Math.min(quantity, product.stock) }];
-    });
+    try {
+      setItems((prev) => {
+        const existing = prev.find((i) => i.product.id === product.id);
+        if (existing) {
+          const nextQty = Math.min(existing.quantity + quantity, product.stock);
+          return prev.map((i) => (i.product.id === product.id ? { ...i, quantity: nextQty } : i));
+        }
+        return [...prev, { product, quantity: Math.min(quantity, product.stock) }];
+      });
+      showNotification("Product added to cart");
+    } catch (error) {
+      console.error("Failed to add to cart.", error);
+    }
   };
 
-  const removeFromCart = (productId: string) => {
-    setItems((prev) => prev.filter((i) => i.product.id !== productId));
+  const removeFromCart = async (productId: string) => {
+    try {
+      setItems((prev) => prev.filter((i) => i.product.id !== productId));
+    } catch (error) {
+      console.error("Failed to remove from cart.", error);
+    }
   };
 
-  const updateQuantity = (productId: string, quantity: number) => {
+  const updateQuantity = async (productId: string, quantity: number) => {
     if (quantity <= 0) return removeFromCart(productId);
-    setItems((prev) =>
-      prev.map((i) =>
-        i.product.id === productId
-          ? { ...i, quantity: Math.min(quantity, i.product.stock) }
-          : i
-      )
-    );
+    try {
+      setItems((prev) =>
+        prev.map((i) =>
+          i.product.id === productId
+            ? { ...i, quantity: Math.min(quantity, i.product.stock) }
+            : i
+        )
+      );
+    } catch (error) {
+      console.error("Failed to update cart quantity.", error);
+    }
   };
 
-  const clearCart = () => setItems([]);
+  const clearCart = async () => {
+    try {
+      setItems([]);
+    } catch (error) {
+      console.error("Failed to clear cart.", error);
+    }
+  };
 
   const totalItems = useMemo(() => items.reduce((sum, i) => sum + i.quantity, 0), [items]);
   const subtotal = useMemo(() =>
@@ -79,7 +102,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const total = subtotal + deliveryFee;
 
   return (
-    <CartContext.Provider value={{ items, addToCart, removeFromCart, updateQuantity, clearCart, totalItems, subtotal, deliveryFee, total }}>
+    <CartContext.Provider value={{ items, addToCart, removeFromCart, updateQuantity, clearCart, totalItems, subtotal, deliveryFee, total, notification, clearNotification }}>
       {children}
     </CartContext.Provider>
   );

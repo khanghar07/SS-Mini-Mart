@@ -7,7 +7,7 @@ import { formatCurrency } from "@/lib/format";
 const OrderConfirmation = () => {
   const { orderId } = useParams();
   const { orders } = useOrders();
-  const order = orders.find((o) => o.id === orderId);
+  const order = orders.find((o) => o.id === orderId || o.orderId === orderId);
 
   if (!order) {
     return (
@@ -31,11 +31,11 @@ const OrderConfirmation = () => {
         <div className="rounded-lg bg-emerald-50 p-4 mb-6 text-left space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-ink-700">Order ID</span>
-            <span className="font-heading font-bold text-ink-900">{order.id}</span>
+            <span className="font-heading font-bold text-ink-900">{order.orderId || order.id}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-ink-700">Total</span>
-            <span className="font-heading font-bold text-ink-900">{formatCurrency(order.totalAmount)}</span>
+            <span className="font-heading font-bold text-ink-900">{formatCurrency(order.total ?? order.totalAmount)}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-ink-700">Status</span>
@@ -43,7 +43,7 @@ const OrderConfirmation = () => {
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-ink-700">Payment</span>
-            <span className="font-medium text-ink-900">Cash on Delivery</span>
+            <span className="font-medium text-ink-900">{order.paymentMethod ?? "Cash on Delivery"}</span>
           </div>
         </div>
 

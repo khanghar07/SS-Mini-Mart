@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "@/context/CartContext";
-import { useOrders } from "@/context/OrderContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { formatCurrency } from "@/lib/format";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 const Checkout = () => {
   const { items, subtotal, deliveryFee, total, clearCart } = useCart();
-  const { addOrder } = useOrders();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({ name: "", phone: "", address: "", notes: "" });
@@ -21,9 +21,13 @@ const Checkout = () => {
     return null;
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim() || !form.phone.trim() || !form.address.trim()) {
+      return;
+    }
+    if (form.phone.trim().length !== 11) {
+      alert("Phone number must be 11 digits.");
       return;
     }
 
@@ -50,11 +54,32 @@ const Checkout = () => {
       stockAdjusted: "none" as const,
     };
 
-    setTimeout(() => {
-      addOrder(order);
-      clearCart();
+    try {
+      await addDoc(collection(db, "orders"), {
+        id: orderId,
+        orderId,
+        items: order.items,
+        total: order.totalAmount,
+        status: "Pending",
+        paymentMethod: "Cash on Delivery",
+        customerName: order.customerName,
+        phone: order.phone,
+        address: order.address,
+        notes: order.notes,
+        subtotal: order.subtotal,
+        deliveryFee: order.deliveryFee,
+        totalAmount: order.totalAmount,
+        stockAdjusted: order.stockAdjusted,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      await clearCart();
       navigate(`/order-confirmation/${orderId}`);
-    }, 500);
+    } catch (error) {
+      console.error("Failed to place order.", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -69,7 +94,18 @@ const Checkout = () => {
           </div>
           <div>
             <Label htmlFor="phone">Phone Number *</Label>
-            <Input id="phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required />
+            <Input
+              id="phone"
+              value={form.phone}
+              onChange={(e) => {
+                const digits = e.target.value.replace(/\D/g, "").slice(0, 11);
+                setForm({ ...form, phone: digits });
+              }}
+              inputMode="numeric"
+              maxLength={11}
+              pattern="\d{11}"
+              required
+            />
           </div>
           <div>
             <Label htmlFor="address">Delivery Address *</Label>

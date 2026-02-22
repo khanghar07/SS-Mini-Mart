@@ -12,7 +12,7 @@ export interface Product {
   description: string;
   price: number;
   discount: number;
-  category: string;
+  categoryId: string;
   imageUrl: string;
   stock: number;
   isActive: boolean;
@@ -34,6 +34,8 @@ export type StockAdjusted = "none" | "deducted" | "restored";
 
 export interface Order {
   id: string;
+  orderId?: string;
+  firestoreId?: string;
   customerName: string;
   phone: string;
   address: string;
@@ -41,8 +43,11 @@ export interface Order {
   items: OrderItem[];
   subtotal: number;
   deliveryFee: number;
+  total?: number;
   totalAmount: number;
   status: OrderStatus;
+  paymentMethod?: string;
+  userId?: string;
   createdAt: string;
   updatedAt: string;
   stockAdjusted?: StockAdjusted;
@@ -51,6 +56,7 @@ export interface Order {
 export interface Category {
   id: string;
   name: string;
+  createdAt?: string;
   icon: string;
   imageUrl: string;
 }
@@ -61,5 +67,14 @@ export interface Banner {
   imageUrl: string;
   link?: string;
   isActive: boolean;
+  createdAt: string;
+}
+
+export type UserRole = "admin" | "customer";
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  role: UserRole;
   createdAt: string;
 }

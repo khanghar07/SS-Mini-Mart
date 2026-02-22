@@ -1,7 +1,8 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
-import { LayoutDashboard, Package, ClipboardList, BarChart3, LogOut, Store, Tags, Image as ImageIcon } from "lucide-react";
+import { LayoutDashboard, Package, ClipboardList, BarChart3, LogOut, Store, Tags, Image as ImageIcon, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAdminAuth } from "@/context/AdminAuthContext";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/admin/dashboard" },
@@ -9,30 +10,22 @@ const navItems = [
   { label: "Categories", icon: Tags, path: "/admin/categories" },
   { label: "Ads", icon: ImageIcon, path: "/admin/banners" },
   { label: "Orders", icon: ClipboardList, path: "/admin/orders" },
-  { label: "Reports", icon: BarChart3, path: "/admin/reports" }
+  { label: "Reports", icon: BarChart3, path: "/admin/reports" },
+  { label: "Account", icon: User, path: "/admin/account" }
 ];
 
 const AdminLayout = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAdmin, logout } = useAdminAuth();
 
   useEffect(() => {
-    const raw = localStorage.getItem("freshmart-admin");
-    if (!raw) {
-      navigate("/admin");
-      return;
-    }
-    try {
-      const parsed = JSON.parse(raw);
-      if (!parsed?.username) navigate("/admin");
-    } catch {
-      navigate("/admin");
-    }
-  }, [navigate]);
+    if (!isAdmin) navigate("/admin-login");
+  }, [isAdmin, navigate]);
 
   const handleLogout = () => {
-    localStorage.removeItem("freshmart-admin");
-    navigate("/admin");
+    logout();
+    navigate("/admin-login");
   };
 
   return (

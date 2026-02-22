@@ -17,7 +17,7 @@ const statusOptions: OrderStatus[] = [
 const isFinal = (status: OrderStatus) => status === "Cancelled" || status === "Delivered";
 
 const AdminOrders = () => {
-  const { orders, updateOrderStatus, markStockAdjusted } = useOrders();
+  const { orders, updateOrderStatus, markStockAdjusted, deleteOrder } = useOrders();
   const { adjustStock } = useProducts();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [pendingStatus, setPendingStatus] = useState<Record<string, OrderStatus>>({});
@@ -29,24 +29,24 @@ const AdminOrders = () => {
     return { activeOrders: active, completedOrders: completed, cancelledOrders: cancelled };
   }, [orders]);
 
-  const applyStatusAndStock = (order: Order) => {
+  const applyStatusAndStock = async (order: Order) => {
     const nextStatus = pendingStatus[order.id] || order.status;
     if (isFinal(order.status)) return;
 
     if (nextStatus !== order.status) {
-      updateOrderStatus(order.id, nextStatus);
+      await updateOrderStatus(order.id, nextStatus);
     }
 
     const adjusted: StockAdjusted = order.stockAdjusted || "none";
 
     if ((nextStatus === "Accepted" || nextStatus === "Delivered") && adjusted !== "deducted") {
       adjustStock(order.items, "deduct");
-      markStockAdjusted(order.id, "deducted");
+      await markStockAdjusted(order.id, "deducted");
     }
 
     if (nextStatus === "Cancelled" && adjusted === "deducted") {
       adjustStock(order.items, "restore");
-      markStockAdjusted(order.id, "restored");
+      await markStockAdjusted(order.id, "restored");
     }
   };
 
@@ -59,6 +59,8 @@ const AdminOrders = () => {
             <th className="pb-3">Customer</th>
             <th className="pb-3">Phone</th>
             <th className="pb-3">Total</th>
+            <th className="pb-3">Payment</th>
+            <th className="pb-3">Created</th>
             <th className="pb-3">Status</th>
             <th className="pb-3">Actions</th>
           </tr>
@@ -66,10 +68,12 @@ const AdminOrders = () => {
         <tbody className="text-ink-900">
           {list.map((o) => (
             <tr key={o.id} className="border-t border-emerald-100 align-top">
-              <td className="py-3 font-semibold">{o.id}</td>
+              <td className="py-3 font-semibold">{o.orderId || o.id}</td>
               <td className="py-3">{o.customerName}</td>
               <td className="py-3">{o.phone}</td>
-              <td className="py-3">{formatCurrency(o.totalAmount)}</td>
+              <td className="py-3">{formatCurrency(o.total ?? o.totalAmount)}</td>
+              <td className="py-3">{o.paymentMethod ?? "Cash on Delivery"}</td>
+              <td className="py-3">{new Date(o.createdAt).toLocaleString()}</td>
               <td className="py-3">
                 <select
                   className="input py-2"
@@ -103,6 +107,15 @@ const AdminOrders = () => {
                 >
                   Update
                 </button>
+                <button
+                  className="btn-outline w-full text-rose-600 border-rose-200"
+                  type="button"
+                  onClick={() => {
+                    if (confirm("Delete this order?")) deleteOrder(o.id);
+                  }}
+                >
+                  Delete
+                </button>
               </td>
             </tr>
           ))}
@@ -121,6 +134,10 @@ const AdminOrders = () => {
     return (
       <div className="mt-6 rounded-xl border border-emerald-100 bg-emerald-50 p-4">
         <div className="grid gap-2 md:grid-cols-2 text-sm">
+          <div><span className="text-ink-700">Order ID:</span> <span className="font-semibold">{order.orderId || order.id}</span></div>
+          <div><span className="text-ink-700">Status:</span> <span className="font-semibold">{order.status}</span></div>
+          <div><span className="text-ink-700">Payment:</span> <span className="font-semibold">{order.paymentMethod ?? "Cash on Delivery"}</span></div>
+          <div><span className="text-ink-700">Created:</span> <span className="font-semibold">{new Date(order.createdAt).toLocaleString()}</span></div>
           <div><span className="text-ink-700">Customer:</span> <span className="font-semibold">{order.customerName}</span></div>
           <div><span className="text-ink-700">Phone:</span> <span className="font-semibold">{order.phone}</span></div>
           <div className="md:col-span-2"><span className="text-ink-700">Address:</span> <span className="font-semibold">{order.address}</span></div>
@@ -139,9 +156,17 @@ const AdminOrders = () => {
             <span>Total Quantity</span>
             <span>{totalQuantity}</span>
           </div>
+          <div className="flex justify-between pt-2 text-ink-700">
+            <span>Subtotal</span>
+            <span>{formatCurrency(order.subtotal ?? 0)}</span>
+          </div>
+          <div className="flex justify-between text-ink-700">
+            <span>Delivery Fee</span>
+            <span>{formatCurrency(order.deliveryFee ?? 0)}</span>
+          </div>
           <div className="flex justify-between font-semibold pt-2">
             <span>Total</span>
-            <span>{formatCurrency(order.totalAmount)}</span>
+            <span>{formatCurrency(order.totalAmount ?? order.total ?? 0)}</span>
           </div>
         </div>
       </div>

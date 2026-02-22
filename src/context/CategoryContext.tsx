@@ -1,56 +1,129 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Category } from "@/types";
-import { categories as seedCategories } from "@/data/categories";
+import { db } from "@/lib/firebase";
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
+  type DocumentData,
+  type QueryDocumentSnapshot,
+} from "firebase/firestore";
 
 interface CategoryContextType {
   categories: Category[];
-  addCategory: (category: Category) => void;
-  updateCategory: (category: Category) => void;
-  deleteCategory: (categoryId: string) => void;
+  loading: boolean;
+  error: string | null;
+  addCategory: (category: Category) => Promise<void>;
+  updateCategory: (category: Category) => Promise<void>;
+  deleteCategory: (categoryId: string) => Promise<void>;
 }
 
-const STORAGE_KEY = "freshmart-categories";
 const CategoryContext = createContext<CategoryContextType | undefined>(undefined);
 
 export const CategoryProvider = ({ children }: { children: React.ReactNode }) => {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [docIdMap, setDocIdMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) {
-      setCategories(seedCategories);
-      return;
-    }
-    try {
-      const parsed = JSON.parse(saved);
-      setCategories(Array.isArray(parsed) ? parsed : seedCategories);
-    } catch {
-      setCategories(seedCategories);
-    }
+    let active = true;
+    const ref = query(collection(db, "categories"), orderBy("createdAt", "desc"));
+
+    const syncSnapshot = (docs: Array<QueryDocumentSnapshot<DocumentData>>) => {
+      const mapped: Category[] = [];
+      const map: Record<string, string> = {};
+      docs.forEach((snap) => {
+        const data = snap.data() as Partial<Category>;
+        const id = typeof data.id === "string" && data.id.trim() ? data.id : snap.id;
+        mapped.push({
+          id,
+          name: data.name ?? "Untitled category",
+          icon: data.icon ?? "??",
+          imageUrl: data.imageUrl ?? "",
+          createdAt:
+            typeof data.createdAt === "string"
+              ? data.createdAt
+              : typeof data.createdAt === "object" && data.createdAt && "toDate" in data.createdAt
+              ? (data.createdAt as { toDate: () => Date }).toDate().toISOString()
+              : new Date().toISOString(),
+        });
+        map[id] = snap.id;
+      });
+      if (active) {
+        setCategories(mapped);
+        setDocIdMap(map);
+        setLoading(false);
+        setError(null);
+      }
+    };
+
+    const unsubscribe = onSnapshot(
+      ref,
+      (snapshot) => syncSnapshot(snapshot.docs),
+      (error) => {
+        console.error("Failed to sync categories from Firestore.", error);
+        if (active) {
+          setCategories([]);
+          setLoading(false);
+          setError("Failed to sync categories.");
+        }
+      }
+    );
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
-  useEffect(() => {
+  const addCategory = async (category: Category) => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(categories));
+      await addDoc(collection(db, "categories"), {
+        id: category.id,
+        name: category.name,
+        icon: category.icon,
+        imageUrl: category.imageUrl,
+        createdAt: serverTimestamp(),
+      });
     } catch (error) {
-      // Avoid crashing the app if storage is full or unavailable.
-      console.warn("Failed to save categories to localStorage.", error);
+      console.error("Failed to add category to Firestore.", error);
     }
-  }, [categories]);
-
-  const addCategory = (category: Category) => {
-    setCategories((prev) => [category, ...prev]);
   };
 
-  const updateCategory = (category: Category) => {
-    setCategories((prev) => prev.map((c) => (c.id === category.id ? category : c)));
+  const updateCategory = async (category: Category) => {
+    try {
+      const docId = docIdMap[category.id] ?? category.id;
+      await updateDoc(doc(db, "categories", docId), {
+        id: category.id,
+        name: category.name,
+        icon: category.icon,
+        imageUrl: category.imageUrl,
+      });
+    } catch (error) {
+      console.error("Failed to update category in Firestore.", error);
+    }
   };
 
-  const deleteCategory = (categoryId: string) => {
-    setCategories((prev) => prev.filter((c) => c.id !== categoryId));
+  const deleteCategory = async (categoryId: string) => {
+    try {
+      const docId = docIdMap[categoryId] ?? categoryId;
+      await deleteDoc(doc(db, "categories", docId));
+    } catch (error) {
+      console.error("Failed to delete category from Firestore.", error);
+    }
   };
 
-  const value = useMemo(() => ({ categories, addCategory, updateCategory, deleteCategory }), [categories]);
+  const value = useMemo(
+    () => ({ categories, loading, error, addCategory, updateCategory, deleteCategory }),
+    [categories, loading, error, docIdMap]
+  );
 
   return <CategoryContext.Provider value={value}>{children}</CategoryContext.Provider>;
 };

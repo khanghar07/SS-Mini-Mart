@@ -2,7 +2,7 @@ import AdminLayout from "@/components/layout/AdminLayout";
 import { useCategories } from "@/context/CategoryContext";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { fileToDataUrl } from "@/lib/file";
+import { uploadToCloudinary } from "@/lib/cloudinary";
 import type { Category } from "@/types";
 
 const slugify = (value: string) =>
@@ -25,11 +25,13 @@ type FormState = typeof emptyForm;
 const AdminCategories = () => {
   const { categories, addCategory, updateCategory, deleteCategory } = useCategories();
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const isEditing = Boolean(form.id);
 
   const handleAddOrUpdate = () => {
-    if (!form.name.trim()) return;
+    if (!form.name.trim() || !form.imageUrl.trim()) return;
     const base = slugify(form.name);
     let id = form.id || base || `cat-${Date.now()}`;
     if (!form.id && categories.some((c) => c.id === id)) {
@@ -40,9 +42,7 @@ const AdminCategories = () => {
       id,
       name: form.name.trim(),
       icon: form.icon.trim() || "??",
-      imageUrl:
-        form.imageUrl.trim() ||
-        "https://images.unsplash.com/photo-1542838132-92c53300491e?w=800&h=800&fit=crop",
+      imageUrl: form.imageUrl.trim(),
     };
 
     if (isEditing) updateCategory(payload);
@@ -66,8 +66,17 @@ const AdminCategories = () => {
 
   const handleFile = async (file?: File | null) => {
     if (!file) return;
-    const dataUrl = await fileToDataUrl(file);
-    setForm((prev) => ({ ...prev, imageUrl: dataUrl }));
+    setUploading(true);
+    setUploadProgress(0);
+    try {
+      const url = await uploadToCloudinary(file);
+      setUploadProgress(100);
+      setForm((prev) => ({ ...prev, imageUrl: url }));
+    } catch (error) {
+      console.error("Failed to upload category image.", error);
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -103,12 +112,14 @@ const AdminCategories = () => {
 
         <div className="card p-6">
           <h2 className="text-lg font-semibold text-ink-900">{isEditing ? "Edit Category" : "Add New Category"}</h2>
-          <p className="text-sm text-ink-700 mt-1">Images are uploaded locally and stored in browser.</p>
+          <p className="text-sm text-ink-700 mt-1">Images are uploaded to cloud storage.</p>
           <div className="mt-4 space-y-3">
             <input className="input" placeholder="Category name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <input className="input" placeholder="Icon (emoji)" value={form.icon} onChange={(e) => setForm({ ...form, icon: e.target.value })} />
-            <input className="input" placeholder="Image URL (optional)" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} />
             <input type="file" accept="image/*" onChange={(e) => handleFile(e.target.files?.[0])} />
+            {uploading && (
+              <div className="text-xs text-ink-700">Uploading image... {uploadProgress}%</div>
+            )}
             <div className="flex gap-2">
               <button type="button" className="btn-primary w-full" onClick={handleAddOrUpdate}>
                 {isEditing ? "Update Category" : "Add Category"}

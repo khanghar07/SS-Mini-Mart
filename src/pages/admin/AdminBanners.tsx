@@ -1,7 +1,7 @@
 import { useState } from "react";
 import AdminLayout from "@/components/layout/AdminLayout";
 import { useBanners } from "@/context/BannerContext";
-import { fileToDataUrl } from "@/lib/file";
+import { uploadToCloudinary } from "@/lib/cloudinary";
 import type { Banner } from "@/types";
 
 const emptyForm = {
@@ -29,6 +29,8 @@ const getImageSize = (dataUrl: string) =>
 const AdminBanners = () => {
   const { banners, addBanner, updateBanner, deleteBanner } = useBanners();
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const isEditing = Boolean(form.id);
 
@@ -66,16 +68,27 @@ const AdminBanners = () => {
   const handleFile = async (file?: File | null) => {
     if (!file) return;
     if (file.size > MAX_BANNER_IMAGE_BYTES) {
-      alert("Image is too large for local storage. Please use a smaller image or paste an image URL instead.");
+      alert("Image is too large. Please use a smaller image.");
       return;
     }
-    const dataUrl = await fileToDataUrl(file);
+    const dataUrl = URL.createObjectURL(file);
     const { width, height } = await getImageSize(dataUrl);
+    URL.revokeObjectURL(dataUrl);
     if (width > MAX_BANNER_WIDTH || height > MAX_BANNER_HEIGHT) {
       alert(`Banner image is too large. Max allowed is ${MAX_BANNER_WIDTH}x${MAX_BANNER_HEIGHT}px.`);
       return;
     }
-    setForm((prev) => ({ ...prev, imageUrl: dataUrl }));
+    setUploading(true);
+    setUploadProgress(0);
+    try {
+      const url = await uploadToCloudinary(file);
+      setUploadProgress(100);
+      setForm((prev) => ({ ...prev, imageUrl: url }));
+    } catch (error) {
+      console.error("Failed to upload banner image.", error);
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -123,8 +136,10 @@ const AdminBanners = () => {
           <form className="mt-4 space-y-3" onSubmit={(e) => e.preventDefault()}>
             <input className="input" placeholder="Banner title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
             <input className="input" placeholder="Click URL (optional)" value={form.link} onChange={(e) => setForm({ ...form, link: e.target.value })} />
-            <input className="input" placeholder="Image URL (optional)" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} />
             <input type="file" accept="image/*" onChange={(e) => handleFile(e.target.files?.[0])} />
+            {uploading && (
+              <div className="text-xs text-ink-700">Uploading image... {uploadProgress}%</div>
+            )}
             <label className="flex items-center gap-2 text-sm text-ink-700">
               <input
                 type="checkbox"

@@ -66,7 +66,7 @@ const TrackOrder = () => {
       {order && (
         <div className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-soft">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-heading font-bold text-ink-900">{order.id}</h2>
+            <h2 className="font-heading font-bold text-ink-900">{order.orderId || order.id}</h2>
             <Badge className={statusColors[order.status]}>{order.status}</Badge>
           </div>
 
@@ -96,7 +96,7 @@ const TrackOrder = () => {
             </div>
             <div className="border-t border-emerald-100 pt-2 flex justify-between font-heading font-bold text-ink-900">
               <span>Total</span>
-              <span>{formatCurrency(order.totalAmount)}</span>
+              <span>{formatCurrency(order.total ?? order.totalAmount)}</span>
             </div>
           </div>
         </div>

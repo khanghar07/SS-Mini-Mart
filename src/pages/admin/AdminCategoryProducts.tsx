@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import type { Product } from "@/types";
 import { formatCurrency } from "@/lib/format";
-import { fileToDataUrl } from "@/lib/file";
+import { uploadToCloudinary } from "@/lib/cloudinary";
 
 const emptyForm = {
   id: "",
@@ -26,17 +26,19 @@ const AdminCategoryProducts = () => {
   const { categories } = useCategories();
   const [search, setSearch] = useState("");
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const category = categories.find((c) => c.id === id);
 
   const filtered = useMemo(() => {
-    return products.filter((p) => p.category === id && p.name.toLowerCase().includes(search.toLowerCase()));
+    return products.filter((p) => p.categoryId === id && p.name.toLowerCase().includes(search.toLowerCase()));
   }, [products, id, search]);
 
   const isEditing = Boolean(form.id);
 
   const handleAddOrUpdate = () => {
-    if (!id || !form.name.trim() || !form.price.trim() || !form.stock.trim()) return;
+    if (!id || !form.name.trim() || !form.price.trim() || !form.stock.trim() || !form.imageUrl.trim()) return;
 
     const price = Number(form.price);
     const stock = Number(form.stock);
@@ -49,10 +51,8 @@ const AdminCategoryProducts = () => {
       description: form.description.trim() || "Fresh product added by admin.",
       price,
       discount,
-      category: id,
-      imageUrl:
-        form.imageUrl.trim() ||
-        "https://images.unsplash.com/photo-1542838132-92c53300491e?w=800&h=800&fit=crop",
+      categoryId: id,
+      imageUrl: form.imageUrl.trim(),
       stock,
       isActive: true,
     };
@@ -82,11 +82,20 @@ const AdminCategoryProducts = () => {
   const handleFile = async (file?: File | null) => {
     if (!file) return;
     if (file.size > MAX_PRODUCT_IMAGE_BYTES) {
-      alert("Image is too large for local storage. Please use a smaller image or paste an image URL instead.");
+      alert("Image is too large. Please use a smaller image.");
       return;
     }
-    const dataUrl = await fileToDataUrl(file);
-    setForm((prev) => ({ ...prev, imageUrl: dataUrl }));
+    setUploading(true);
+    setUploadProgress(0);
+    try {
+      const url = await uploadToCloudinary(file);
+      setUploadProgress(100);
+      setForm((prev) => ({ ...prev, imageUrl: url }));
+    } catch (error) {
+      console.error("Failed to upload product image.", error);
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -141,8 +150,10 @@ const AdminCategoryProducts = () => {
           <input className="input" placeholder="Price (PKR)" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
           <input className="input" placeholder="Stock quantity" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
           <input className="input" placeholder="Discount %" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} />
-          <input className="input md:col-span-2" placeholder="Image URL" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} />
           <input type="file" accept="image/*" onChange={(e) => handleFile(e.target.files?.[0])} />
+          {uploading && (
+            <div className="text-xs text-ink-700 md:col-span-2">Uploading image... {uploadProgress}%</div>
+          )}
           <textarea className="input md:col-span-2" rows={2} placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </div>
         <div className="mt-4 flex gap-2">
